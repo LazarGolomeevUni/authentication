@@ -34,18 +34,22 @@ app.get("/users", (req, res) => {
 app.post("/register", async (req, res) => {
     try {
         const hashedPassword = await bcrypt.hash(req.body.password, 10);
-        const user = { username: req.body.username, password: hashedPassword, age: req.body.age, field: req.body.field };
-        const sql = `INSERT INTO userdb.users (username, password, age, field)
-               VALUES ('${req.body.username}', '${hashedPassword}', ${req.body.age}, '${req.body.field}')`;
-        pool.query(sql, (err, res) => {
+        if (req.body.consent === 0) {
+            res.status(451).send("No consent no account");
+        }
+        const user = { username: req.body.username, password: hashedPassword, age: req.body.age, field: req.body.field, consent: req.body.consent };
+        const sql = `INSERT INTO userdb.users (username, password, age, field, consent)
+               VALUES ('${req.body.username}', '${hashedPassword}', ${req.body.age}, '${req.body.field}', ${req.body.consent})`;
+        pool.query(sql, (err, response) => {
             if (err) {
-                console.log(err);
+                res.status(500).send();
             }
             else {
-                console.log("result: " + res)
+                console.log("result: " + response)
+                res.status(201).send();
             }
         })
-        res.status(201).send();
+
     } catch {
         res.status(500).send();
     }
@@ -87,13 +91,15 @@ app.post("/login", async (req, res) => {
             }
             try {
                 const passwordComparrison = await bcrypt.compare(req.body.password, user.password);
+                console.log(passwordComparrison)
                 if (passwordComparrison) {
+                    delete user.password;
                     const accessToken = generateAccessToken(user);
                     const refreshToken = jwt.sign(user, process.env.REFRESH_TOKEN_SECRET)
                     refreshTokens.push(refreshToken)
                     res.json({ accessToken: accessToken, refreshToken: refreshToken });
                 } else {
-                    res.send("Not allowed");
+                    res.status(500).send("oops");
                 }
             } catch {
                 res.status(500).send("oops");
@@ -127,6 +133,21 @@ app.delete('/logout', (req, res) => {
     res.sendStatus(204)
 })
 
+app.delete('/delete', (req, res) => {
+    const user = JSON.parse(req.headers['user']);
+    const sql = `DELETE FROM userdb.users WHERE id = ${user.id};`;
+    pool.query(sql, (err, res) => {
+        if (err) {
+            console.log(err);
+        }
+        else {
+            console.log("result: " + res)
+        }
+    })
+
+    res.sendStatus(204);
+})
+
 function generateAccessToken(user) {
     return jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '15m' });
 }
@@ -138,3 +159,6 @@ app.use("/", (req, res, next) => {
 app.listen(8001, () => {
     console.log("Authentication is listening to port 8001");
 });
+
+
+module.exports = app;
