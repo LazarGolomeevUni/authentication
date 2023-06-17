@@ -36,19 +36,19 @@ app.post("/register", async (req, res) => {
         const hashedPassword = await bcrypt.hash(req.body.password, 10);
         if (req.body.consent === 0) {
             res.status(451).send("No consent no account");
-        }
-        const user = { username: req.body.username, password: hashedPassword, age: req.body.age, field: req.body.field, consent: req.body.consent };
-        const sql = `INSERT INTO userdb.users (username, password, age, field, consent)
+        } else {
+            const sql = `INSERT INTO userdb.users (username, password, age, field, consent)
                VALUES ('${req.body.username}', '${hashedPassword}', ${req.body.age}, '${req.body.field}', ${req.body.consent})`;
-        pool.query(sql, (err, response) => {
-            if (err) {
-                res.status(500).send();
-            }
-            else {
-                console.log("result: " + response)
-                res.status(201).send();
-            }
-        })
+            pool.query(sql, (err, response) => {
+                if (err) {
+                    res.status(500).send();
+                }
+                else {
+                    console.log("result: " + response)
+                    res.status(201).send();
+                }
+            })
+        }
 
     } catch {
         res.status(500).send();
