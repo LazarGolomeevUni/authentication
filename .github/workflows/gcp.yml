@@ -49,18 +49,18 @@ jobs:
 
       - name: Build Docker Image
         run:
-          docker build -t europe-west4-docker.pkg.dev/togetherboxd-389917/gateway-repo/api-gateway:${{ github.sha }} .
+          docker build -t us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }} .
 
       - name: Push Image to Registry
         run:
-          docker push europe-west4-docker.pkg.dev/togetherboxd-389917/gateway-repo/api-gateway:${{ github.sha }}
+          docker push us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }} .
 
       - name: Deploy to GKE Cluster
         run: |
           gcloud components install gke-gcloud-auth-plugin
-          gcloud container clusters get-credentials togetherboxd-cluster --zone europe-west4
+          gcloud container clusters get-credentials portify-cluster --zone us-central1
           sleep 5s
-          kubectl set image deployment/api-gateway api-gateway=europe-west4-docker.pkg.dev/togetherboxd-389917/gateway-repo/api-gateway:${{ github.sha }}
+          kubectl set image deployment/authentication authentication=us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }}
 
 
 # name: Build and Push Python Image to Google Cloud Platform
