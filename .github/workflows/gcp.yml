@@ -53,7 +53,7 @@ jobs:
 
       - name: Push Image to Registry
         run:
-          docker push us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }} .
+          docker push us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }}
 
       - name: Deploy to GKE Cluster
         run: |
