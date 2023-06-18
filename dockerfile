@@ -22,7 +22,7 @@ ENV REFRESH_TOKEN_SECRET=$REFRESH_TOKEN_SECRET
 # ENV ACCESS_TOKEN_SECRET "$ACCESS_TOKEN_SECRET"
 # ENV REFRESH_TOKEN_SECRET "$REFRESH_TOKEN_SECRET"
 # Define the network ports that this container will listen to at runtime.
-EXPOSE 8000
+EXPOSE 8001
 
 # Configure the container to be run as an executable.
 # ENTRYPOINT [ "/bin/sh", "-c", "npm start"]
