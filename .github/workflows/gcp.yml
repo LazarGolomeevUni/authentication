@@ -56,6 +56,7 @@ jobs:
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v2
   build:
+    needs: quality-check
     name: Setup, Publish, and Deploy
     runs-on: ubuntu-latest
 
