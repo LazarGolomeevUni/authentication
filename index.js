@@ -8,7 +8,7 @@ const app = express();
 
 app.use(express.json());
 const pool = createPool({
-    host: "localhost",
+    host: "34.32.226.52",
     user: "root",
     password: "password"
 })
