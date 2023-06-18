@@ -49,18 +49,22 @@ jobs:
 
       - name: Build Docker Image
         run:
-          docker build -t us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }} .
+          docker build -t europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 
+      
+      - name: Verify Docker Image
+        run:
+          docker images
 
       - name: Push Image to Registry
         run:
-          docker push us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }}
+          docker push europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 
 
       - name: Deploy to GKE Cluster
         run: |
           gcloud components install gke-gcloud-auth-plugin
-          gcloud container clusters get-credentials portify-cluster --zone us-central1
+          gcloud container clusters get-credentials authentication-cluster --zone europe-west4
           sleep 5s
-          kubectl set image deployment/authentication authentication=us-central1-docker.pkg.dev/portify-389116/authentication-repo/authentication:${{ github.sha }}
+          kubectl set image deployment/authentication authentication=europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 
 
 
 # name: Build and Push Python Image to Google Cloud Platform
