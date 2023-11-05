@@ -7,11 +7,21 @@ const { createPool } = require("mysql");
 const app = express();
 
 app.use(express.json());
+//MySQL connection
+//This one is for local env
 const pool = createPool({
-    host: "34.32.226.52",
+    host: "localhost",
     user: "root",
     password: "password"
 })
+
+//MySQL connection
+//This one is for cloud env
+// const pool = createPool({
+//     host: "34.32.226.52",
+//     user: "root",
+//     password: "password"
+// })
 
 let users = [];
 let refreshTokens = [];
@@ -37,11 +47,11 @@ app.post("/register", async (req, res) => {
         if (req.body.consent === 0) {
             res.status(451).send("No consent no account");
         } else {
-            const sql = `INSERT INTO userdb.users (username, password, age, field, consent)
-               VALUES ('${req.body.username}', '${hashedPassword}', ${req.body.age}, '${req.body.field}', ${req.body.consent})`;
+            const sql = `INSERT INTO userdb.users (username, password, age, consent)
+               VALUES ('${req.body.username}', '${hashedPassword}', ${req.body.age}, ${req.body.consent})`;
             pool.query(sql, (err, response) => {
                 if (err) {
-                    res.status(500).send();
+                    res.status(500).send(err);
                 }
                 else {
                     console.log("result: " + response)
