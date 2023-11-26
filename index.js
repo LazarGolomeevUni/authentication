@@ -10,9 +10,9 @@ app.use(express.json());
 //MySQL connection
 //This one is for local env
 const pool = createPool({
-    host: "localhost",
-    user: "root",
-    password: "password"
+    host: "thelibraryclub.cwahxov3y8ow.eu-north-1.rds.amazonaws.com",
+    user: "lazar",
+    password: "thelibraryclub"
 })
 
 //MySQL connection
