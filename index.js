@@ -15,10 +15,10 @@ const pool = createPool({
     password: "thelibraryclub"
 })
 
-//MySQL connection
-//This one is for cloud env
+// MySQL connection
+// This one is for cloud env
 // const pool = createPool({
-//     host: "34.32.226.52",
+//     host: "localhost",
 //     user: "root",
 //     password: "password"
 // })
