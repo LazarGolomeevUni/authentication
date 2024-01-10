@@ -9,6 +9,5 @@ spec:
   selector:
     app: authentication-microservice
   ports:
-    - protocol: TCP
-      port: 80
+    - port: 8001
       targetPort: 8001
