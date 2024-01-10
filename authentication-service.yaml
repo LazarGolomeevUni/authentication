@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: authentication-linux-service
+  namespace: the-library-club-namespace
+  labels:
+    app: authentication-microservice
+spec:
+  type: LoadBalancer
+  selector:
+    app: authentication-microservice
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8001

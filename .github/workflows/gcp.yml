@@ -1,9 +1,14 @@
-name: Build and Deploy to GKE
+name: Deploy
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+
+env:
+  DOCKERHUB_REPOSITORY: lazargolomeev
+  K8S_CLUSTER_NAME: the-library-club-CICD-cluster
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
 jobs:
   quality-check:
@@ -17,284 +22,221 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'javascript' ]
+        language: ["javascript"]
         # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby' ]
         # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    # Initializes the CodeQL tools for scanning.
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: ${{ matrix.language }}
-        # If you wish to specify custom queries, you can do so here or in a config file.
-        # By default, queries listed here will override any specified in a config file.
-        # Prefix the list here with "+" to use these queries and those in the config file.
-        
-        # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
-        # queries: security-extended,security-and-quality
+      # Initializes the CodeQL tools for scanning.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v2
+        with:
+          languages: ${{ matrix.language }}
+          # If you wish to specify custom queries, you can do so here or in a config file.
+          # By default, queries listed here will override any specified in a config file.
+          # Prefix the list here with "+" to use these queries and those in the config file.
 
-        
-    # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
-    # If this step fails, then you should remove it and run the build manually (see below)
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v2
+          # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
+          # queries: security-extended,security-and-quality
 
-    # ℹ️ Command-line programs to run using the OS shell.
-    # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
+      # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
+      # If this step fails, then you should remove it and run the build manually (see below)
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v2
 
-    #   If the Autobuild fails above, remove it and uncomment the following three lines. 
-    #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
+      # ℹ️ Command-line programs to run using the OS shell.
+      # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
 
-    # - run: |
-    #   echo "Run, Build Application using script"
-    #   ./location_of_script_within_repo/buildscript.sh
+      #   If the Autobuild fails above, remove it and uncomment the following three lines.
+      #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      # - run: |
+      #   echo "Run, Build Application using script"
+      #   ./location_of_script_within_repo/buildscript.sh
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v2
+
   build:
+    
     needs: quality-check
-    name: Setup, Publish, and Deploy
+    name: Deployment
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+    - name: Set short git commit SHA
+      id: commit
+      uses: prompt/actions-commit-hash@v2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v2
-        with:
-          node-version: '14'
+    - name: Check out code
+      uses: actions/checkout@v2
 
-      - name: Install Dependencies
-        run: npm install
-  
-  # Test the key
-      - name: Debug API Key
-        run: echo "${{ secrets.GKE_SA_KEY }}"
-      
-  # Authentication to google cloud services
-      - name: Auth
-        id: 'auth'
-        uses: 'google-github-actions/auth@v1.0.0'
-        with:
-          credentials_json: '${{ secrets.GKE_SA_KEY }}'
-          token_format: 'access_token'
-          create_credentials_file: true
-          
-  # Setting up tools for iteracting with google cloud services
-      - name: 'Set up Cloud SDK'
-        uses: 'google-github-actions/setup-gcloud@v0'
-        
-  #Check google cloud connection
-      - name: 'Use gcloud CLI'
-        run: 'gcloud info'
+    # Snyk vulnerability scan
+    - uses: snyk/actions/setup@master
+    - uses: actions/setup-go@v1
+      with:
+        go-version: "1.13"
+    - name: Scan for vulnerabilities with Snyk
+      run: snyk test --severity-threshold=medium || true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_AUTH_TOKEN }}
+      id: snyk-test
 
-      - name: Auth to google cloud services
-        run: |
-          gcloud auth login --brief --cred-file=${{ steps.auth.outputs.credentials_file_path }}
-          gcloud auth configure-docker europe-west4-docker.pkg.dev
+    - name: Login to Docker Hub
+      uses: docker/login-action@v1
+      with:
+        username: ${{ env.DOCKERHUB_USERNAME }}
+        password: ${{ env.DOCKERHUB_TOKEN }}
 
-      - name: Build Docker Image
-        run:
-          docker build -t europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 .
-      
-      - name: Verify Docker Image
-        run:
-          docker images
+    - name: Build and push Docker image
+      run: |
+        docker build -t $DOCKERHUB_REPOSITORY/authentication:${{ github.sha }} .
+        docker push $DOCKERHUB_REPOSITORY/authentication:${{ github.sha }}
 
-      # Snyk vulnerability scan
-      - uses: snyk/actions/setup@master
-      - uses: actions/setup-go@v1
-        with:
-          go-version: "1.13"
-      - name: Scan for vulnerabilities with Snyk
-        run: snyk test --severity-threshold=medium || true
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_AUTH_TOKEN }}
-        id: snyk-test
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{env.AWS_REGION}}
 
-      - name: Push Image to Registry
-        run:
-          docker push europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 
+    - name: Update kube config
+      run: aws eks update-kubeconfig --name $K8S_CLUSTER_NAME
 
-      - name: Deploy to GKE Cluster
-        run: |
-          gcloud components install gke-gcloud-auth-plugin
-          gcloud container clusters get-credentials authentication-cluster --zone europe-west4
-          sleep 5s
-          kubectl set image deployment/authentication authentication=europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 
+    - name: Deploy to Kubernetes
+      run: |
+        sed -i "s|DOCKER_IMAGE|$DOCKERHUB_REPOSITORY/authentication:${{ github.sha }}|g" deployment.yaml
+        kubectl apply -f authentication-deployment.yaml
 
-
-# name: Build and Push Python Image to Google Cloud Platform
+# 
+# kubectl set image deployment/my-app-deployment my-app-container=$DOCKERHUB_REPOSITORY/my-app:${{ github.sha }} --record
+# |
+#         kubectl set image deployment/authentication-deployment authentication=$DOCKERHUB_REPOSITORY/authentication:${{ github.sha }} --record
 # on:
 #   push:
-#     branches: [ main ]
+#     branches:
+#       - main
+
 # jobs:
-#   build-push-gcr:
-#     name: Build and Push to GCP
+#   quality-check:
+#     name: Analyze
 #     runs-on: ubuntu-latest
-#     env:
-#       IMAGE_NAME: authentication
-#       PROJECT_ID: portify-389116
+#     permissions:
+#       actions: read
+#       contents: read
+#       security-events: write
+
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         language: [ 'javascript' ]
+#         # CodeQL supports [ 'cpp', 'csharp', 'go', 'java', 'javascript', 'python', 'ruby' ]
+#         # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
+
 #     steps:
-#     - name: Checkout
-#       uses: actions/checkout@v2
+#     - name: Checkout repository
+#       uses: actions/checkout@v3
 
-#     - uses: google-github-actions/setup-gcloud@v1
+#     # Initializes the CodeQL tools for scanning.
+#     - name: Initialize CodeQL
+#       uses: github/codeql-action/init@v2
 #       with:
-#         service_account_key: ${{ secrets.GKE_SA_KEY }}
-#         project_id: ${{ env.PROJECT_ID }}
-#         export_default_credentials: true
+#         languages: ${{ matrix.language }}
+#         # If you wish to specify custom queries, you can do so here or in a config file.
+#         # By default, queries listed here will override any specified in a config file.
+#         # Prefix the list here with "+" to use these queries and those in the config file.
 
-#     - name: Build Docker Image
-#       run: docker build -t $IMAGE_NAME:latest .
+#         # Details on CodeQL's query packs refer to : https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
+#         # queries: security-extended,security-and-quality
 
-#     - name: Automatic Tagging of Releases
-#       id: increment-git-tag
-#       run: |
-#         bash ./scripts/git_update.sh -v major
+#     # Autobuild attempts to build any compiled languages  (C/C++, C#, or Java).
+#     # If this step fails, then you should remove it and run the build manually (see below)
+#     - name: Autobuild
+#       uses: github/codeql-action/autobuild@v2
 
-#     - name: Configure Docker Client
-#       run: |-
-#         gcloud auth configure-docker --quiet
-#         gcloud auth configure-docker us-west2-docker.pkg.dev --quiet
+#     # ℹ️ Command-line programs to run using the OS shell.
+#     # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
 
-#     - name: Push Docker Image to Container Registry (GCR)
-#       env:
-#         GIT_TAG: ${{ steps.increment-git-tag.outputs.git-tag }}
-#       run: |-
-#         docker tag $IMAGE_NAME:latest gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
-#         docker tag $IMAGE_NAME:latest gcr.io/$PROJECT_ID/$IMAGE_NAME:$GIT_TAG
-#         docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:latest
-#         docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$GIT_TAG
+#     #   If the Autobuild fails above, remove it and uncomment the following three lines.
+#     #   modify them (or add more) to build your code if your project, please refer to the EXAMPLE below for guidance.
 
-#     - name: Push Docker Image to Artifact Registry
-#       env:
-#         GIT_TAG: ${{ steps.increment-git-tag.outputs.git-tag }}
-#       run: |-
-#         docker tag $IMAGE_NAME:latest us-west2-docker.pkg.dev/$PROJECT_ID/images/$IMAGE_NAME:latest
-#         docker tag $IMAGE_NAME:latest us-west2-docker.pkg.dev/$PROJECT_ID/images/$IMAGE_NAME:$GIT_TAG
-#         docker push us-west2-docker.pkg.dev/$PROJECT_ID/images/$IMAGE_NAME:latest
-#         docker push us-west2-docker.pkg.dev/$PROJECT_ID/images/$IMAGE_NAME:$GIT_TAG
+#     # - run: |
+#     #   echo "Run, Build Application using script"
+#     #   ./location_of_script_within_repo/buildscript.sh
 
-
-# name: Build and Push Python Image to Google Cloud Platform
-# on:
-#   push:
-#     branches: [ main ]
-# env:
-#   PROJECT_ID: ${{ secrets.GKE_PROJECT }}
-#   GKE_CLUSTER: portify-k8   # put your cluster name here
-#   GKE_ZONE: us-central1      # put your cluster zone here
-#   IMAGE: gcr.io/${{ secrets.GKE_PROJECT }}/authentication  # put your app name here
-
-# jobs:
-#   deploy:
+#     - name: Perform CodeQL Analysis
+#       uses: github/codeql-action/analyze@v2
+#   build:
+#     needs: quality-check
+#     name: Setup, Publish, and Deploy
 #     runs-on: ubuntu-latest
 
 #     steps:
-#     - name: Checkout
-#       uses: actions/checkout@v2
+#       - uses: actions/checkout@v2
 
-#     - name: Print environment variables
-#       run: |
-#         echo "PROJECT_ID: $PROJECT_ID"
-#         echo "GKE_CLUSTER: $GKE_CLUSTER"
-#         echo "GKE_ZONE: $GKE_ZONE"
-#         echo "IMAGE: $IMAGE"
+#       - name: Set up Node.js
+#         uses: actions/setup-node@v2
+#         with:
+#           node-version: '14'
 
-#     - name: Set up Cloud SDK
-#       uses: google-github-actions/setup-gcloud@v0.2.1
-#       with:
-#         project_id: ${{ secrets.GKE_PROJECT }}
-#         service_account_key: ${{ secrets.GKE_SA_KEY }}
-#         export_default_credentials: true
+#       - name: Install Dependencies
+#         run: npm install
 
-#     - name: Install gke-gcloud-auth-plugin
-#       run: |
-#         curl -LO https://storage.googleapis.com/gke-release/auth-plugins/gke-gcloud-auth-plugin.tar.gz
-#         tar xzf gke-gcloud-auth-plugin.tar.gz
-#         sudo mv gke-gcloud-auth-plugin /usr/local/bin
-#         rm gke-gcloud-auth-plugin.tar.gz
+#   # Test the key
+#       - name: Debug API Key
+#         run: echo "${{ secrets.GKE_SA_KEY }}"
 
-#     - name: Configure Docker
-#       run: |
-#         gcloud --quiet auth configure-docker
+#   # Authentication to google cloud services
+#       - name: Auth
+#         id: 'auth'
+#         uses: 'google-github-actions/auth@v1.0.0'
+#         with:
+#           credentials_json: '${{ secrets.GKE_SA_KEY }}'
+#           token_format: 'access_token'
+#           create_credentials_file: true
 
-#     - name: Build and push Docker image
-#       run: |
-#         docker build --build-arg IMAGE="$IMAGE" -t "$IMAGE:latest" .
-#         docker push "$IMAGE:latest"
+#   # Setting up tools for iteracting with google cloud services
+#       - name: 'Set up Cloud SDK'
+#         uses: 'google-github-actions/setup-gcloud@v0'
 
-#     - name: Update Kubernetes deployment
-#       run: |
-#         gcloud container clusters get-credentials "$GKE_CLUSTER" --zone "$GKE_ZONE"
-#         kubectl set image deployment/node-app node-app="$IMAGE:latest"
+#   #Check google cloud connection
+#       - name: 'Use gcloud CLI'
+#         run: 'gcloud info'
 
+#       - name: Auth to google cloud services
+#         run: |
+#           gcloud auth login --brief --cred-file=${{ steps.auth.outputs.credentials_file_path }}
+#           gcloud auth configure-docker europe-west4-docker.pkg.dev
 
+#       - name: Build Docker Image
+#         run:
+#           docker build -t europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1 .
 
-  # security-check:
-    #   runs-on: ubuntu-latest
-    #   steps:
-    #     - name: Checkout
-    #       uses: actions/checkout@v2
-        
-    #     - name: Run Anchore Container Scan
-    #       uses: anchore/scan-action@v3
-    #       with:
-    #         dockerfile-path: './dockerfile'
-  
-    # quality-check:
-    #   runs-on: ubuntu-latest
-    #   steps:
-    #     - name: Checkout
-    #       uses: actions/checkout@v2
-        
-    #     - name: Run ESLint
-    #       uses: wagoid/commitlint-github-action@v3
+#       - name: Verify Docker Image
+#         run:
+#           docker images
 
-  # build-and-deploy:
-  #   # needs: [security-check, quality-check]
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Build and push Docker image
-  #       uses: docker/build-push-action@v2
-  #       with:
-  #         context: .
-  #         push: true
-  #         tags: ${{ env.IMAGE }}:latest
-  #       env:
-  #         SECRET_KEY_1: ${{ secrets.SECRET_KEY_1 }}
-  #         SECRET_KEY_2: ${{ secrets.SECRET_KEY_2 }}
-  #     - name: Checkout
-  #       uses: actions/checkout@v2
+#       # Snyk vulnerability scan
+#       - uses: snyk/actions/setup@master
+#       - uses: actions/setup-go@v1
+#         with:
+#           go-version: "1.13"
+#       - name: Scan for vulnerabilities with Snyk
+#         run: snyk test --severity-threshold=medium || true
+#         env:
+#           SNYK_TOKEN: ${{ secrets.SNYK_AUTH_TOKEN }}
+#         id: snyk-test
 
-  #     - name: Set up Docker Buildx
-  #       uses: docker/setup-buildx-action@v1
+#       - name: Push Image to Registry
+#         run:
+#           docker push europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1
 
-  #     - name: Build and push Docker image
-  #       uses: docker/build-push-action@v2
-  #       with:
-  #         context: .
-  #         push: true
-  #         tags: ${{ env.IMAGE }}:latest
-
-  #     - name: Setup Google Cloud SDK
-  #       uses: google-github-actions/setup-gcloud@v0.2.1
-  #       with:
-  #         project_id: ${{ env.PROJECT_ID }}
-  #         service_account_key: ${{ secrets.GKE_SA_KEY }}
-  #         export_default_credentials: true
-
-  #     - name: Deploy to GKE
-  #       uses: google-github-actions/deploy-gke@v0.2.0
-  #       with:
-  #         credentials: ${{ secrets.GKE_SA_KEY }}
-  #         project_id: ${{ env.PROJECT_ID }}
-  #         name: ${{ env.GKE_CLUSTER }}
-  #         location: ${{ env.GKE_ZONE }}
-  #         manifest: deployment.yaml
-  #         images: ${{ env.IMAGE }}=${{ env.IMAGE }}:latest
+#       - name: Deploy to GKE Cluster
+#         run: |
+#           gcloud components install gke-gcloud-auth-plugin
+#           gcloud container clusters get-credentials authentication-cluster --zone europe-west4
+#           sleep 5s
+#           kubectl set image deployment/authentication authentication=europe-west4-docker.pkg.dev/portifycloud/authentication-repo/authentication:v1

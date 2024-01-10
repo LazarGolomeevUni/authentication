@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authentication-deployment
+  namespace: the-library-club-namespace
+  labels:
+    app: authentication-microservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authentication-microservice
+  template:
+    metadata:
+      labels:
+        app: authentication-microservice
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                - amd64
+      containers:
+      - name: authentication
+        image: DOCKER_IMAGE
+        ports:
+        - name: http
+          containerPort: 8001
+        imagePullPolicy: Always
+      nodeSelector:
+        kubernetes.io/os: linux
