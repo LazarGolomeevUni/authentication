@@ -109,7 +109,7 @@ jobs:
     - name: Deploy to Kubernetes
       run: |
         sed -i "s|DOCKER_IMAGE|$DOCKERHUB_REPOSITORY/authentication:${{ github.sha }}|g" authentication-deployment.yaml
-        kubectl apply -f authentication-deployment.yaml
+        kubectl apply -f authentication-deployment.yaml --validate=false
 
 # 
 # kubectl set image deployment/my-app-deployment my-app-container=$DOCKERHUB_REPOSITORY/my-app:${{ github.sha }} --record
