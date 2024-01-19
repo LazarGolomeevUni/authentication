@@ -152,7 +152,7 @@ app.delete('/logout', (req, res) => {
 
 app.delete('/delete', (req, res) => {
     const user = JSON.parse(req.headers['user']);
-    const sql = `DELETE FROM userdb.users WHERE id = ${user.id};`;
+    const sql = `DELETE FROM userdb.users WHERE id = ${req.body.id}`;
     pool.query(sql, (err, res) => {
         if (err) {
             console.log(err);
